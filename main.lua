@@ -311,6 +311,10 @@ do
 			[drawing.Fonts.Monospace] = Font.new("rbxasset://fonts/families/Ubuntu.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal)
 		};
 
+        local TextBoundsCache = {}
+        local TextBoundsOrder = table.create(1024)
+        local TextBoundsCursor = 1
+
 		local text = {};
 
 		function text.new()
@@ -423,12 +427,21 @@ do
 
 		function text:_updateTextBounds()
 			local props = self._properties;
-			props.TextBounds = _gettextboundsasync(textService, create("GetTextBoundsParams", {
-				Text = props.Text,
-				Size = props.Size,
-				Font = enumToFont[props.Font],
-				Width = huge
-			}));
+            local key = `{props.Font}:{props.Size}:{props.Text}`
+            local bounds = TextBoundsCache[key]
+            if not bounds then
+                local parameters = create("GetTextBoundsParams", { Text = props.Text, Size = props.Size, Font = enumToFont[props.Font], Width = huge })
+                local success, result = pcall(_gettextboundsasync, textService, parameters)
+                _destroy(parameters)
+                if not success then error(result, 0) end
+                bounds = result
+                local evicted = TextBoundsOrder[TextBoundsCursor]
+                if evicted then TextBoundsCache[evicted] = nil end
+                TextBoundsOrder[TextBoundsCursor] = key
+                TextBoundsCursor = TextBoundsCursor % 1024 + 1
+                TextBoundsCache[key] = bounds
+            end
+            props.TextBounds = bounds
 		end
 
 		text.Remove = text.Destroy;
